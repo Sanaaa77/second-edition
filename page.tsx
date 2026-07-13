@@ -1,45 +1,37 @@
-"use client";
-import React, { useMemo } from "react";
-import { PortalLayout } from "@/components/portal/PortalLayout";
-import { SuccessMoments } from "@/components/ui/PremiumComponents";
-import { useJourney } from "@/hooks/useJourney";
-import { useQuery } from "@tanstack/react-query";
-import { ExecutiveDashboard } from "@/components/dashboard/ExecutiveDashboard";
-import { container } from "@/lib/core/di/Container";
-import { TOKENS } from "@/lib/core/di/registry";
-import { ApplicationService } from "@/services/application/application.service";
-import { Loader2 } from "lucide-react";
+import { Metadata } from 'next';
+import { container, TOKENS } from '@/lib/core/di/registry';
+import { KnowledgeService } from '@/services/university/knowledge.service';
+import { UniversityDetail } from '@/components/university/UniversityDetail';
+import { notFound } from 'next/navigation';
 
-export default function DashboardPage() {
-  const { user, isLoading: journeyLoading } = useJourney();
-  const [showWelcome, setShowWelcome] = React.useState(false);
+interface Props {
+  params: { slug: string };
+}
 
-  const applicationService = useMemo(() => container.resolve<ApplicationService>(TOKENS.APPLICATION_SERVICE), []);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const knowledgeService = container.resolve<KnowledgeService>(TOKENS.KNOWLEDGE_SERVICE);
+  const university = await knowledgeService.getUniversityDetail(params.slug);
 
-  const { data: apps = [], isLoading: appsLoading } = useQuery({
-    queryKey: ['applications'],
-    queryFn: () => applicationService.getMyApplications(),
-    enabled: !!user,
-  });
+  if (!university) return { title: 'University Not Found' };
 
-  React.useEffect(() => {
-    if (!journeyLoading) {
-      setShowWelcome(true);
-    }
-  }, [journeyLoading]);
+  return {
+    title: `${university.name} | معرفی کامل و شرایط پذیرش | ترکیه هاب`,
+    description: university.description?.substring(0, 160),
+    openGraph: {
+      title: university.name,
+      description: university.description?.substring(0, 160),
+      images: [university.hero_image_url || ''],
+    },
+  };
+}
 
-  if (journeyLoading || appsLoading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#030712]">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      </div>
-    );
+export default async function UniversityPage({ params }: Props) {
+  const knowledgeService = container.resolve<KnowledgeService>(TOKENS.KNOWLEDGE_SERVICE);
+  const university = await knowledgeService.getUniversityDetail(params.slug);
+
+  if (!university) {
+    notFound();
   }
 
-  return (
-    <PortalLayout>
-      <SuccessMoments show={showWelcome} onComplete={() => setShowWelcome(false)} />
-      <ExecutiveDashboard apps={apps} />
-    </PortalLayout>
-  );
+  return <UniversityDetail university={university} />;
 }
